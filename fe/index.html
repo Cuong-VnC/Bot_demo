@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reup Automation Control Panel</title>
+    <!-- Outfit Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Connection Setup Overlay Modal -->
+        <div id="connection-modal" class="modal-overlay hidden">
+            <div class="modal-card">
+                <h2><i data-lucide="key-round"></i> Cấu hình kết nối Backend</h2>
+                <p>Vui lòng nhập thông tin kết nối tới Hugging Face Space của bạn.</p>
+                <div class="form-group">
+                    <label for="input-api-url">Hugging Face URL</label>
+                    <input type="text" id="input-api-url" placeholder="https://username-space-name.hf.space">
+                    <small>Đường dẫn công khai của Hugging Face Space.</small>
+                </div>
+                <div class="form-group">
+                    <label for="input-api-key">API Key (X-API-Key)</label>
+                    <input type="password" id="input-api-key" placeholder="Nhập mã khóa bảo mật của bạn">
+                    <small>Mã khóa được cấu hình trong biến môi trường BACKEND_API_KEY.</small>
+                </div>
+                <div id="connection-error" class="error-msg hidden"></div>
+                <button id="btn-save-connection" class="btn btn-primary">
+                    <i data-lucide="cable"></i> Kết nối hệ thống
+                </button>
+            </div>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-logo">
+                    <i data-lucide="refresh-cw" class="logo-spin"></i>
+                </div>
+                <div>
+                    <h2>Reup Engine</h2>
+                    <span class="version">v2.0 Web Control</span>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-tab="dashboard">
+                    <i data-lucide="layout-dashboard"></i> Dashboard
+                </a>
+                <a href="#" class="nav-item" data-tab="channels">
+                    <i data-lucide="shuffle"></i> Kênh & Ánh xạ
+                </a>
+                <a href="#" class="nav-item" data-tab="reup">
+                    <i data-lucide="sliders"></i> Cấu hình Reup
+                </a>
+                <a href="#" class="nav-item" data-tab="auto">
+                    <i data-lucide="cpu"></i> Quét tự động
+                </a>
+                <a href="#" class="nav-item" data-tab="manual">
+                    <i data-lucide="play-circle"></i> Quét thủ công
+                </a>
+                <a href="#" class="nav-item" data-tab="settings">
+                    <i data-lucide="settings"></i> Cài đặt hệ thống
+                </a>
+            </nav>
+
+            <div class="connection-status">
+                <div class="status-indicator online"></div>
+                <div class="status-details">
+                    <span class="status-label">Kết nối Backend</span>
+                    <span id="backend-status-text" class="status-value">Đang tải...</span>
+                </div>
+                <button id="btn-disconnect" class="btn-icon" title="Cấu hình lại kết nối">
+                    <i data-lucide="log-out"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="main-header">
+                <div>
+                    <h1 id="page-title">Dashboard</h1>
+                    <p id="page-subtitle" class="text-muted">Tổng quan hệ thống tự động hóa reup video.</p>
+                </div>
+                <div class="header-actions">
+                    <div id="scheduler-badge" class="badge">
+                        <span class="badge-dot"></span>
+                        <span id="scheduler-badge-text">Đang tải...</span>
+                    </div>
+                    <button id="btn-trigger-scan" class="btn btn-primary">
+                        <i data-lucide="refresh-cw"></i> Quét tự động ngay
+                    </button>
+                    <button id="btn-toggle-scheduler" class="btn btn-secondary">
+                        <i data-lucide="power"></i> Bật/Tắt Scheduler
+                    </button>
+                </div>
+            </header>
+
+            <!-- Scrollable Content -->
+            <div class="content-body">
+                <!-- Tab: Dashboard -->
+                <section id="tab-dashboard" class="tab-pane active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon icon-blue"><i data-lucide="radio"></i></div>
+                            <div>
+                                <span class="stat-label">Kênh giám sát</span>
+                                <h3 id="stat-monitored" class="stat-value">-</h3>
+                                <span class="stat-sub text-muted">Đang quét liên tục</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon icon-purple"><i data-lucide="arrow-right-left"></i></div>
+                            <div>
+                                <span class="stat-label">Kênh đích</span>
+                                <h3 id="stat-destinations" class="stat-value">-</h3>
+                                <span class="stat-sub text-muted">Nguồn phân phối video</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon icon-green"><i data-lucide="clock"></i></div>
+                            <div>
+                                <span class="stat-label">Chu kỳ quét</span>
+                                <h3 id="stat-interval" class="stat-value">-</h3>
+                                <span class="stat-sub text-muted">Độ trễ mỗi lượt quét</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon icon-orange"><i data-lucide="list-video"></i></div>
+                            <div>
+                                <span class="stat-label">Hàng đợi video</span>
+                                <h3 id="stat-queue" class="stat-value">-</h3>
+                                <span class="stat-sub text-muted">Tổng số video được lưu</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-details">
+                        <!-- System logs terminal -->
+                        <div class="card terminal-card">
+                            <div class="card-header">
+                                <h3><i data-lucide="terminal"></i> Nhật ký hệ thống (Real-time logs)</h3>
+                                <button id="btn-refresh-logs" class="btn btn-icon-only" title="Làm mới logs"><i data-lucide="refresh-cw"></i></button>
+                            </div>
+                            <div id="logs-terminal" class="terminal-body">
+                                <div class="log-line info">Hệ thống sẵn sàng...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Channels & Mapping -->
+                <section id="tab-channels" class="tab-pane">
+                    <div class="channels-layout">
+                        <!-- Add/List Monitored Channels -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Kênh giám sát (Kênh nguồn)</h3>
+                            </div>
+                            <form id="form-add-monitored" class="add-channel-form">
+                                <select id="add-mon-platform" class="form-select">
+                                    <option value="youtube">YouTube</option>
+                                    <option value="tiktok">TikTok</option>
+                                    <option value="facebook">Facebook</option>
+                                </select>
+                                <input type="url" id="add-mon-url" placeholder="Nhập URL kênh nguồn..." required>
+                                <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Thêm</button>
+                            </form>
+                            <div id="monitored-list" class="channel-list">
+                                <!-- Dynamically populated monitored channels -->
+                            </div>
+                        </div>
+
+                        <!-- Channel Destination Mapping Details -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Ánh xạ kênh đích (Mapping)</h3>
+                                <span class="text-muted subtitle" id="mapping-channel-title">Chọn kênh giám sát để cấu hình</span>
+                            </div>
+                            <div id="mapping-container" class="mapping-body disabled">
+                                <p class="placeholder-text">Vui lòng bấm vào một kênh giám sát ở cột bên trái để thiết lập danh sách kênh đích tương ứng.</p>
+                                <div id="mapping-list-inputs" class="hidden">
+                                    <!-- Dynamic Destination Checkboxes -->
+                                </div>
+                                <button id="btn-save-mapping" class="btn btn-primary hidden mt-4"><i data-lucide="save"></i> Lưu cấu hình ánh xạ</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Reup Settings -->
+                <section id="tab-reup" class="tab-pane">
+                    <div class="reup-layout">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Cấu hình Video & Thuật toán lách bản quyền</h3>
+                            </div>
+                            <form id="form-reup-settings" class="reup-form">
+                                <div class="grid-2">
+                                    <div class="form-group">
+                                        <label for="reup-speed">Tốc độ video (0.5 - 3.0)</label>
+                                        <input type="number" id="reup-speed" step="0.05" min="0.5" max="3" value="1.0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reup-zoom">Độ phóng to (Zoom: 1.0 - 2.0)</label>
+                                        <input type="number" id="reup-zoom" step="0.05" min="1" max="2" value="1.0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reup-intro">Cắt đoạn mở đầu (Giây)</label>
+                                        <input type="number" id="reup-intro" step="0.5" min="0" value="0.0">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reup-outro">Cắt đoạn kết thúc (Giây)</label>
+                                        <input type="number" id="reup-outro" step="0.5" min="0" value="0.0">
+                                    </div>
+                                </div>
+
+                                <h4 class="settings-divider">Lách bản quyền âm thanh & hình ảnh</h4>
+                                <div class="checkbox-grid">
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="reup-flip">
+                                        <span class="switch-slider"></span>
+                                        Lật ngang khung hình (Horizontal Flip)
+                                    </label>
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="reup-pitch-enabled">
+                                        <span class="switch-slider"></span>
+                                        Thay đổi Pitch âm thanh (Tránh quét nhạc)
+                                    </label>
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="reup-color">
+                                        <span class="switch-slider"></span>
+                                        Cân bằng màu lách (Độ tương phản/bão hòa)
+                                    </label>
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="reup-noise">
+                                        <span class="switch-slider"></span>
+                                        Chèn nhiễu hạt video vi mô (Noise)
+                                    </label>
+                                    <label class="switch-container">
+                                        <input type="checkbox" id="reup-vignette">
+                                        <span class="switch-slider"></span>
+                                        Hiệu ứng viền đen Vignette
+                                    </label>
+                                </div>
+
+                                <div class="grid-2 mt-4">
+                                    <div class="form-group" id="group-pitch-factor">
+                                        <label for="reup-pitch-factor">Hệ số Pitch âm thanh (ví dụ: 1.02)</label>
+                                        <input type="number" id="reup-pitch-factor" step="0.01" min="0.8" max="1.2" value="1.02">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="reup-meta-rewrite">Viết lại tiêu đề & thẻ bằng AI</label>
+                                        <label class="switch-container mt-2">
+                                            <input type="checkbox" id="reup-meta-enabled">
+                                            <span class="switch-slider"></span>
+                                            Kích hoạt viết lại tiêu đề qua Gemini/Groq
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary mt-4"><i data-lucide="check-circle2"></i> Lưu cài đặt Video</button>
+                            </form>
+                        </div>
+
+                        <!-- Music Library -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Thư viện nhạc nền</h3>
+                            </div>
+                            
+                            <label class="switch-container mb-4">
+                                <input type="checkbox" id="reup-music-enabled">
+                                <span class="switch-slider"></span>
+                                Ghép nhạc nền ngẫu nhiên cho video reup
+                            </label>
+
+                            <div class="form-group">
+                                <label for="reup-music-volume">Âm lượng nhạc nền (0.05 - 1.0)</label>
+                                <input type="range" id="reup-music-volume" min="0.05" max="1.0" step="0.05" value="0.5" class="range-slider">
+                                <span id="volume-val-display" class="slider-display">50%</span>
+                            </div>
+
+                            <div class="upload-area" id="music-upload-zone">
+                                <i data-lucide="upload-cloud"></i>
+                                <p>Kéo thả file nhạc hoặc bấm vào đây để upload (.mp3)</p>
+                                <input type="file" id="music-file-input" accept="audio/mpeg" class="hidden">
+                            </div>
+
+                            <div id="music-list" class="music-list mt-4">
+                                <!-- Dynamic Music List -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Auto Scan Mode -->
+                <section id="tab-auto" class="tab-pane">
+                    <div class="auto-layout">
+                        <!-- Scheduler control card -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3>Bộ lập lịch quét & Đăng tự động (Scheduler)</h3>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <button id="btn-trigger-scan-tab" class="btn btn-primary btn-sm">
+                                        <i data-lucide="refresh-cw"></i> Quét tất cả ngay
+                                    </button>
+                                    <button id="btn-toggle-scheduler-tab" class="btn btn-secondary btn-sm">
+                                        <i data-lucide="power"></i> Bật/Tắt Scheduler
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid-2 mt-4" style="grid-template-columns: 2.5fr 1fr; gap: 2rem; align-items: center;">
+                                <div>
+                                    <p class="text-muted text-sm" style="margin-bottom: 0;">Bộ lập lịch chạy nền sẽ định kỳ quét các kênh nguồn, tải video mới nhất về, tự động chạy qua bộ lọc lách bản quyền, viết lại tiêu đề bằng AI và đăng tải lên các kênh đích tương ứng đã được ánh xạ.</p>
+                                </div>
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <div id="scheduler-badge-tab" class="badge">
+                                        <span class="badge-dot"></span>
+                                        <span id="scheduler-badge-text-tab">Đang tải...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Video Queue Table -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h3>Hàng đợi Video Tự Động (Auto Queue)</h3>
+                                    <p class="text-muted text-sm mt-2" style="margin-bottom: 0;">Xem tiến trình tải, lách bản quyền và đăng tải video tự động.</p>
+                                </div>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <button id="btn-clear-completed" class="btn btn-secondary btn-sm">
+                                        <i data-lucide="check-square"></i> Xóa Hoàn thành
+                                    </button>
+                                    <button id="btn-clear-queue-all" class="btn btn-secondary btn-sm text-red" style="border-color: rgba(239, 68, 68, 0.2);" title="Xóa toàn bộ hàng đợi">
+                                        <i data-lucide="trash-2"></i> Xóa tất cả
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="auto-queue-table-container" class="table-container" style="max-height: 550px;">
+                                <table class="videos-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Video</th>
+                                            <th>Nguồn</th>
+                                            <th>Trạng thái</th>
+                                            <th style="text-align: center;">Lượt chạy</th>
+                                            <th>Phân phối & Kết quả</th>
+                                            <th>Ngày quét</th>
+                                            <th style="width: 130px; text-align: center;">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="auto-queue-list-tbody">
+                                        <!-- Dynamically populated auto queue list -->
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted p-4">Đang tải danh sách hàng đợi...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Manual Mode -->
+                <section id="tab-manual" class="tab-pane">
+                    <div class="manual-layout">
+                        <!-- Step 1: Scan videos -->
+                        <div class="card col-span-3">
+                            <div class="card-header">
+                                <h3>1. Quét danh sách video từ kênh nguồn</h3>
+                            </div>
+                            <div class="manual-scan-controls">
+                                <div class="form-group">
+                                    <label for="manual-source-select">Chọn kênh nguồn</label>
+                                    <select id="manual-source-select" class="form-select">
+                                        <option value="">-- Chọn kênh --</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="manual-scan-type">Kiểu quét</label>
+                                    <select id="manual-scan-type" class="form-select">
+                                        <option value="all">Tất cả video (All)</option>
+                                        <option value="latest">Video mới nhất (Latest)</option>
+                                        <option value="long">Video dài (YouTube Long)</option>
+                                        <option value="short">Shorts/Reels (YouTube Short)</option>
+                                    </select>
+                                </div>
+                                <button id="btn-manual-scan" class="btn btn-primary"><i data-lucide="search"></i> Quét Video</button>
+                            </div>
+
+                            <div id="scan-results-container" class="scan-results mt-4 hidden">
+                                <div class="results-header">
+                                    <h4>Danh sách video phát hiện</h4>
+                                    <span id="results-count" class="badge">0 video</span>
+                                </div>
+                                <div id="videos-table-container" class="table-container">
+                                    <table class="videos-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 50px;">Chọn</th>
+                                                <th>Tiêu đề video</th>
+                                                <th>ID</th>
+                                                <th style="width: 120px;">Hành động</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="videos-list-tbody">
+                                            <!-- Dynamically populated video list -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Choose Destination and Process -->
+                        <div class="card" id="manual-process-card">
+                            <div class="card-header">
+                                <h3>2. Chọn kênh đích & Xử lý</h3>
+                            </div>
+                            <div id="manual-process-inputs" class="disabled">
+                                <div id="selected-video-preview" class="selected-video-box mb-4">
+                                    <span class="label">Video đang chọn:</span>
+                                    <p id="preview-video-title">Chưa chọn video nào</p>
+                                </div>
+
+                                <div class="form-group mb-4">
+                                    <label>Chọn kênh đăng tải (Đích)</label>
+                                    <div id="manual-destinations-checklist" class="checkbox-list">
+                                        <!-- Dynamic destination channels list -->
+                                    </div>
+                                </div>
+
+                                <button id="btn-start-manual" class="btn btn-green w-full"><i data-lucide="play"></i> Bắt đầu Reup ngay</button>
+
+                                <div id="manual-progress-box" class="progress-box mt-4 hidden">
+                                    <div class="progress-header">
+                                        <span id="progress-step-text">Đang chuẩn bị...</span>
+                                        <span id="progress-pct-text">0%</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
+                                    </div>
+                                    <p class="progress-sub text-muted" id="progress-sub-text">Hệ thống đang tải và xử lý render FFmpeg.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: System Settings & APIs -->
+                <section id="tab-settings" class="tab-pane">
+                    <div class="settings-layout">
+                        <!-- Form settings APIs -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>🧠 Google AI Studio & Groq API Tokens</h3>
+                            </div>
+                            <form id="form-api-ai" class="settings-form">
+                                <div class="form-group">
+                                    <label for="api-google">Google AI Studio API Key</label>
+                                    <input type="password" id="api-google" placeholder="Nhập Gemini API Key">
+                                </div>
+                                <div class="form-group">
+                                    <label for="api-groq">Groq API Key</label>
+                                    <input type="password" id="api-groq" placeholder="Nhập Groq API Key">
+                                </div>
+                                <div class="api-actions-row">
+                                    <button type="submit" class="btn btn-primary"><i data-lucide="save"></i> Lưu Token AI</button>
+                                    <button type="button" id="btn-test-google" class="btn btn-secondary">Test Google AI</button>
+                                    <button type="button" id="btn-test-groq" class="btn btn-secondary">Test Groq</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- System settings Form -->
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>⚙️ Cài đặt hệ thống & Active Ping</h3>
+                            </div>
+                            <form id="form-system-settings" class="settings-form">
+                                <label class="switch-container mb-4">
+                                    <input type="checkbox" id="sys-ping-enabled">
+                                    <span class="switch-slider"></span>
+                                    Bật Active Ping (Báo thức giữ HF Space sống 24/7)
+                                </label>
+                                <div class="form-group">
+                                    <label for="sys-ping-chat">Telegram Chat ID nhận Ping</label>
+                                    <input type="text" id="sys-ping-chat" placeholder="Ví dụ: -100123456789">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sys-keepawake">Tự động Keep-awake URL</label>
+                                    <input type="url" id="sys-keepawake" placeholder="Tên miền HF Space của bạn">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sys-scan-interval">Chu kỳ tự động quét (Format: HH:MM:SS)</label>
+                                    <input type="text" id="sys-scan-interval" value="01:00:00" placeholder="01:00:00">
+                                </div>
+                                
+                                <h4 class="settings-divider">Cấu hình Backup Database ẩn</h4>
+                                <div class="form-group">
+                                    <label for="sys-backup-token">Backup Bot Token (Dự phòng)</label>
+                                    <input type="password" id="sys-backup-token" placeholder="Bot token sao lưu">
+                                </div>
+                                <div class="form-group">
+                                    <label for="sys-backup-chat">Backup Chat ID</label>
+                                    <input type="text" id="sys-backup-chat" placeholder="Chat ID nhận file database.db">
+                                </div>
+
+                                <button type="submit" class="btn btn-primary mt-2"><i data-lucide="save"></i> Lưu Cấu hình Hệ thống</button>
+                            </form>
+                        </div>
+
+                        <!-- Upload channel credentials -->
+                        <div class="card col-span-2">
+                            <div class="card-header">
+                                <h3>🔑 Đăng nhập / Kết nối tài khoản mạng xã hội (Kênh đích)</h3>
+                            </div>
+                            <div class="api-connections-grid">
+                                <div class="api-connect-card">
+                                    <div class="card-title-row">
+                                        <i data-lucide="youtube" class="text-red"></i>
+                                        <h4>YouTube (OAuth 2.0 Credentials)</h4>
+                                    </div>
+                                    <p class="text-muted text-sm mb-4">Để upload YouTube, hãy tải lên file client_secret.json thu được từ Google Cloud Console.</p>
+                                    <textarea id="api-yt-token-text" placeholder="Dán nội dung JSON OAuth credentials ở đây..." class="form-textarea"></textarea>
+                                    <div class="api-card-actions mt-3">
+                                        <button id="btn-save-yt-api" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Lưu & Đồng bộ</button>
+                                        <button id="btn-test-yt-api" class="btn btn-secondary btn-sm">Kiểm tra kết nối</button>
+                                    </div>
+                                </div>
+
+                                <div class="api-connect-card">
+                                    <div class="card-title-row">
+                                        <i data-lucide="music" class="text-green"></i>
+                                        <h4>TikTok Upload Session ID</h4>
+                                    </div>
+                                    <p class="text-muted text-sm mb-4">Nhập cookie `sessionid` tài khoản TikTok của bạn (lấy từ trình duyệt) để lách upload qua WebSession.</p>
+                                    <input type="password" id="api-tiktok-token-text" placeholder="Nhập sessionid cookie của TikTok" class="form-input">
+                                    <div class="api-card-actions mt-3">
+                                        <button id="btn-save-tiktok-api" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Lưu & Đồng bộ</button>
+                                        <button id="btn-test-tiktok-api" class="btn btn-secondary btn-sm">Kiểm tra kết nối</button>
+                                    </div>
+                                </div>
+
+                                <div class="api-connect-card">
+                                    <div class="card-title-row">
+                                        <i data-lucide="facebook" class="text-blue"></i>
+                                        <h4>Facebook Page Access Token</h4>
+                                    </div>
+                                    <p class="text-muted text-sm mb-4">Nhập Page Access Token dài hạn của fanpage được cấu hình quyền đăng Reels.</p>
+                                    <input type="password" id="api-fb-token-text" placeholder="Nhập Facebook Page Token" class="form-input">
+                                    <div class="api-card-actions mt-3">
+                                        <button id="btn-save-fb-api" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Lưu & Đồng bộ</button>
+                                        <button id="btn-test-fb-api" class="btn btn-secondary btn-sm">Kiểm tra kết nối</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
