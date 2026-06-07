@@ -56,6 +56,9 @@
                 <a href="#" class="nav-item" data-tab="reup">
                     <i data-lucide="sliders"></i> Cấu hình Reup
                 </a>
+                <a href="#" class="nav-item" data-tab="auto">
+                    <i data-lucide="cpu"></i> Quét tự động
+                </a>
                 <a href="#" class="nav-item" data-tab="manual">
                     <i data-lucide="play-circle"></i> Quét thủ công
                 </a>
@@ -89,6 +92,9 @@
                         <span class="badge-dot"></span>
                         <span id="scheduler-badge-text">Đang tải...</span>
                     </div>
+                    <button id="btn-trigger-scan" class="btn btn-primary">
+                        <i data-lucide="refresh-cw"></i> Quét tự động ngay
+                    </button>
                     <button id="btn-toggle-scheduler" class="btn btn-secondary">
                         <i data-lucide="power"></i> Bật/Tắt Scheduler
                     </button>
@@ -288,6 +294,77 @@
 
                             <div id="music-list" class="music-list mt-4">
                                 <!-- Dynamic Music List -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Tab: Auto Scan Mode -->
+                <section id="tab-auto" class="tab-pane">
+                    <div class="auto-layout">
+                        <!-- Scheduler control card -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h3>Bộ lập lịch quét & Đăng tự động (Scheduler)</h3>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <button id="btn-trigger-scan-tab" class="btn btn-primary btn-sm">
+                                        <i data-lucide="refresh-cw"></i> Quét tất cả ngay
+                                    </button>
+                                    <button id="btn-toggle-scheduler-tab" class="btn btn-secondary btn-sm">
+                                        <i data-lucide="power"></i> Bật/Tắt Scheduler
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid-2 mt-4" style="grid-template-columns: 2.5fr 1fr; gap: 2rem; align-items: center;">
+                                <div>
+                                    <p class="text-muted text-sm" style="margin-bottom: 0;">Bộ lập lịch chạy nền sẽ định kỳ quét các kênh nguồn, tải video mới nhất về, tự động chạy qua bộ lọc lách bản quyền, viết lại tiêu đề bằng AI và đăng tải lên các kênh đích tương ứng đã được ánh xạ.</p>
+                                </div>
+                                <div style="display: flex; justify-content: flex-end;">
+                                    <div id="scheduler-badge-tab" class="badge">
+                                        <span class="badge-dot"></span>
+                                        <span id="scheduler-badge-text-tab">Đang tải...</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Video Queue Table -->
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <h3>Hàng đợi Video Tự Động (Auto Queue)</h3>
+                                    <p class="text-muted text-sm mt-2" style="margin-bottom: 0;">Xem tiến trình tải, lách bản quyền và đăng tải video tự động.</p>
+                                </div>
+                                <div style="display: flex; gap: 10px; align-items: center;">
+                                    <button id="btn-clear-completed" class="btn btn-secondary btn-sm">
+                                        <i data-lucide="check-square"></i> Xóa Hoàn thành
+                                    </button>
+                                    <button id="btn-clear-queue-all" class="btn btn-secondary btn-sm text-red" style="border-color: rgba(239, 68, 68, 0.2);" title="Xóa toàn bộ hàng đợi">
+                                        <i data-lucide="trash-2"></i> Xóa tất cả
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div id="auto-queue-table-container" class="table-container" style="max-height: 550px;">
+                                <table class="videos-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Video</th>
+                                            <th>Nguồn</th>
+                                            <th>Trạng thái</th>
+                                            <th style="text-align: center;">Lượt chạy</th>
+                                            <th>Phân phối & Kết quả</th>
+                                            <th>Ngày quét</th>
+                                            <th style="width: 130px; text-align: center;">Hành động</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="auto-queue-list-tbody">
+                                        <!-- Dynamically populated auto queue list -->
+                                        <tr>
+                                            <td colspan="7" class="text-center text-muted p-4">Đang tải danh sách hàng đợi...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     </div>
