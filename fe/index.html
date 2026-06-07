@@ -545,8 +545,9 @@
                                     <p class="text-muted text-sm mb-4">Nhập cookie `sessionid` tài khoản TikTok của bạn (lấy từ trình duyệt) để lách upload qua WebSession.</p>
                                     <input type="password" id="api-tiktok-token-text" placeholder="Nhập sessionid cookie của TikTok" class="form-input">
                                     <div class="api-card-actions mt-3">
-                                        <button id="btn-save-tiktok-api" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Lưu & Đồng bộ</button>
-                                        <button id="btn-test-tiktok-api" class="btn btn-secondary btn-sm">Kiểm tra kết nối</button>
+                                        <button id="btn-save-tiktok-api" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Lưu</button>
+                                        <button id="btn-login-tiktok" class="btn btn-blue btn-sm"><i data-lucide="chrome"></i> Đăng nhập nhanh</button>
+                                        <button id="btn-test-tiktok-api" class="btn btn-secondary btn-sm">Test</button>
                                     </div>
                                 </div>
 
@@ -558,8 +559,9 @@
                                     <p class="text-muted text-sm mb-4">Nhập Page Access Token dài hạn của fanpage được cấu hình quyền đăng Reels.</p>
                                     <input type="password" id="api-fb-token-text" placeholder="Nhập Facebook Page Token" class="form-input">
                                     <div class="api-card-actions mt-3">
-                                        <button id="btn-save-fb-api" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Lưu & Đồng bộ</button>
-                                        <button id="btn-test-fb-api" class="btn btn-secondary btn-sm">Kiểm tra kết nối</button>
+                                        <button id="btn-save-fb-api" class="btn btn-primary btn-sm"><i data-lucide="save"></i> Lưu</button>
+                                        <button id="btn-login-fb" class="btn btn-blue btn-sm"><i data-lucide="chrome"></i> Đăng nhập nhanh</button>
+                                        <button id="btn-test-fb-api" class="btn btn-secondary btn-sm">Test</button>
                                     </div>
                                 </div>
                             </div>
@@ -568,6 +570,43 @@
                 </section>
             </div>
         </main>
+    </div>
+
+    <!-- Virtual Browser Modal for Quick Login -->
+    <div id="browser-modal" class="modal-overlay hidden">
+        <div class="browser-modal-content">
+            <div class="browser-modal-header">
+                <h3><i data-lucide="chrome"></i> Trình duyệt ảo - <span id="browser-platform-title">Đăng nhập</span></h3>
+                <button id="btn-browser-close" class="btn-close-modal">&times;</button>
+            </div>
+            <div class="browser-modal-body">
+                <div class="browser-status-alert">
+                    <span class="spinner-sm"></span>
+                    <span id="browser-status-text">Đang kết nối tới trình duyệt ảo...</span>
+                </div>
+                
+                <div class="virtual-browser-viewport-wrapper">
+                    <img id="browser-screenshot" src="" alt="Virtual Browser Viewport" />
+                    <div id="browser-viewport-loader" class="viewport-loader">
+                        <div class="spinner-md"></div>
+                        <p>Đang tải màn hình...</p>
+                    </div>
+                </div>
+
+                <div class="virtual-browser-controls">
+                    <div class="keyboard-input-group">
+                        <input type="text" id="browser-type-input" placeholder="Nhập văn bản vào đây để gõ..." class="form-input" />
+                        <button id="btn-browser-type-submit" class="btn btn-primary"><i data-lucide="keyboard"></i> Gửi Text</button>
+                    </div>
+                    <div class="special-keys-group">
+                        <button id="btn-browser-key-enter" class="btn btn-secondary btn-sm" data-key="Enter"><i data-lucide="corner-down-left"></i> Enter</button>
+                        <button id="btn-browser-key-backspace" class="btn btn-secondary btn-sm" data-key="Backspace"><i data-lucide="delete"></i> Backspace</button>
+                        <button id="btn-browser-key-tab" class="btn btn-secondary btn-sm" data-key="Tab"><i data-lucide="arrow-right-left"></i> Tab</button>
+                        <button id="btn-browser-key-reload" class="btn btn-secondary btn-sm" data-key="Reload"><i data-lucide="refresh-cw"></i> Tải lại</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="app.js"></script>
