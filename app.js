@@ -122,7 +122,23 @@ const DOM = {
     btnTestTiktokApi: document.getElementById('btn-test-tiktok-api'),
     apiFbTokenText: document.getElementById('api-fb-token-text'),
     btnSaveFbApi: document.getElementById('btn-save-fb-api'),
-    btnTestFbApi: document.getElementById('btn-test-fb-api')
+    btnTestFbApi: document.getElementById('btn-test-fb-api'),
+    
+    // Virtual Browser
+    browserModal: document.getElementById('browser-modal'),
+    btnBrowserClose: document.getElementById('btn-browser-close'),
+    browserPlatformTitle: document.getElementById('browser-platform-title'),
+    browserStatusText: document.getElementById('browser-status-text'),
+    browserScreenshot: document.getElementById('browser-screenshot'),
+    browserViewportLoader: document.getElementById('browser-viewport-loader'),
+    browserTypeInput: document.getElementById('browser-type-input'),
+    btnBrowserTypeSubmit: document.getElementById('btn-browser-type-submit'),
+    btnBrowserKeyEnter: document.getElementById('btn-browser-key-enter'),
+    btnBrowserKeyBackspace: document.getElementById('btn-browser-key-backspace'),
+    btnBrowserKeyTab: document.getElementById('btn-browser-key-tab'),
+    btnBrowserKeyReload: document.getElementById('btn-browser-key-reload'),
+    btnLoginTiktok: document.getElementById('btn-login-tiktok'),
+    btnLoginFb: document.getElementById('btn-login-fb')
 };
 
 // Main API request caller
@@ -1368,6 +1384,238 @@ function setupSocialApiBindings() {
     bindSocial('facebook', DOM.apiFbTokenText, DOM.btnSaveFbApi, DOM.btnTestFbApi);
 }
 
+// ==================== VIRTUAL BROWSER QUICK LOGIN ====================
+let currentBrowserSessionId = null;
+let browserScreenshotPollInterval = null;
+let browserLoginCheckInterval = null;
+let currentBrowserPlatform = null;
+let lastScreenshotUrl = null;
+
+async function fetchBrowserScreenshot(sessionId) {
+    if (!STATE.apiUrl) return;
+    const url = `${STATE.apiUrl.replace(/\/$/, '')}/api/browser/screenshot/${sessionId}`;
+    const response = await fetch(url, {
+        headers: {
+            'X-API-Key': STATE.apiKey
+        }
+    });
+    if (response.status === 401) {
+        showConnectionModal();
+        throw new Error('Unauthorized');
+    }
+    if (!response.ok) {
+        throw new Error('Failed to load screenshot');
+    }
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+}
+
+async function startQuickLogin(platform) {
+    currentBrowserPlatform = platform;
+    DOM.browserPlatformTitle.textContent = platform === 'tiktok' ? 'TikTok' : 'Facebook';
+    DOM.browserStatusText.textContent = 'Đang kết nối tới trình duyệt ảo...';
+    DOM.browserScreenshot.src = '';
+    DOM.browserViewportLoader.classList.remove('hidden');
+    DOM.browserModal.classList.remove('hidden');
+    
+    try {
+        const data = await apiCall('/api/browser/start', 'POST', { platform });
+        if (data.status === 'success') {
+            currentBrowserSessionId = data.session_id;
+            DOM.browserStatusText.textContent = 'Trình duyệt ảo đã sẵn sàng. Vui lòng thực hiện đăng nhập.';
+            startBrowserPolling();
+        } else {
+            alert('Không thể khởi chạy trình duyệt: ' + (data.detail || data.error));
+            closeQuickLogin();
+        }
+    } catch (err) {
+        alert('Lỗi kết nối tới trình duyệt ảo: ' + err.message);
+        closeQuickLogin();
+    }
+}
+
+function startBrowserPolling() {
+    if (browserScreenshotPollInterval) clearInterval(browserScreenshotPollInterval);
+    if (browserLoginCheckInterval) clearInterval(browserLoginCheckInterval);
+    
+    updateBrowserScreenshot();
+    browserScreenshotPollInterval = setInterval(updateBrowserScreenshot, 1500);
+    browserLoginCheckInterval = setInterval(checkBrowserLoginStatus, 2000);
+}
+
+async function updateBrowserScreenshot() {
+    if (!currentBrowserSessionId) return;
+    try {
+        const objectUrl = await fetchBrowserScreenshot(currentBrowserSessionId);
+        if (objectUrl) {
+            if (lastScreenshotUrl) {
+                URL.revokeObjectURL(lastScreenshotUrl);
+            }
+            lastScreenshotUrl = objectUrl;
+            DOM.browserScreenshot.src = objectUrl;
+            DOM.browserViewportLoader.classList.add('hidden');
+        }
+    } catch (err) {
+        console.error('Lỗi lấy ảnh chụp màn hình:', err);
+    }
+}
+
+async function checkBrowserLoginStatus() {
+    if (!currentBrowserSessionId) return;
+    try {
+        const data = await apiCall(`/api/browser/status/${currentBrowserSessionId}`, 'GET');
+        if (data.logged_in) {
+            DOM.browserStatusText.textContent = `Đăng nhập thành công! Đang lưu session...`;
+            alert(`Đăng nhập thành công tài khoản ${currentBrowserPlatform === 'tiktok' ? 'TikTok' : 'Facebook'}!`);
+            
+            if (currentBrowserPlatform === 'tiktok') {
+                DOM.apiTiktokTokenText.value = '••••••••••••••••••••••••••••••••';
+            } else if (currentBrowserPlatform === 'facebook') {
+                DOM.apiFbTokenText.value = '••••••••••••••••••••••••••••••••';
+            }
+            
+            closeQuickLogin(true);
+        }
+    } catch (err) {
+        console.error('Lỗi check login status:', err);
+    }
+}
+
+async function closeQuickLogin(alreadyStopped = false) {
+    if (browserScreenshotPollInterval) {
+        clearInterval(browserScreenshotPollInterval);
+        browserScreenshotPollInterval = null;
+    }
+    if (browserLoginCheckInterval) {
+        clearInterval(browserLoginCheckInterval);
+        browserLoginCheckInterval = null;
+    }
+    
+    if (lastScreenshotUrl) {
+        URL.revokeObjectURL(lastScreenshotUrl);
+        lastScreenshotUrl = null;
+    }
+    
+    const sid = currentBrowserSessionId;
+    currentBrowserSessionId = null;
+    currentBrowserPlatform = null;
+    
+    DOM.browserModal.classList.add('hidden');
+    
+    if (sid && !alreadyStopped) {
+        try {
+            await apiCall(`/api/browser/stop/${sid}`, 'POST');
+        } catch (err) {
+            console.error('Lỗi đóng trình duyệt:', err);
+        }
+    }
+}
+
+async function sendBrowserType() {
+    if (!currentBrowserSessionId) return;
+    const text = DOM.browserTypeInput.value;
+    if (!text) return;
+    
+    DOM.browserViewportLoader.classList.remove('hidden');
+    DOM.browserTypeInput.value = '';
+    try {
+        await apiCall(`/api/browser/type/${currentBrowserSessionId}`, 'POST', { text });
+        await updateBrowserScreenshot();
+    } catch (err) {
+        console.error('Lỗi gửi text:', err);
+    } finally {
+        DOM.browserViewportLoader.classList.add('hidden');
+    }
+}
+
+async function sendBrowserPress(key) {
+    if (!currentBrowserSessionId) return;
+    DOM.browserViewportLoader.classList.remove('hidden');
+    try {
+        await apiCall(`/api/browser/press/${currentBrowserSessionId}`, 'POST', { key });
+        await updateBrowserScreenshot();
+    } catch (err) {
+        console.error('Lỗi gửi phím:', err);
+    } finally {
+        DOM.browserViewportLoader.classList.add('hidden');
+    }
+}
+
+function setupVirtualBrowserHandlers() {
+    // Bind open buttons
+    if (DOM.btnLoginTiktok) {
+        DOM.btnLoginTiktok.addEventListener('click', (e) => {
+            e.preventDefault();
+            startQuickLogin('tiktok');
+        });
+    }
+    if (DOM.btnLoginFb) {
+        DOM.btnLoginFb.addEventListener('click', (e) => {
+            e.preventDefault();
+            startQuickLogin('facebook');
+        });
+    }
+    
+    // Bind close button
+    if (DOM.btnBrowserClose) {
+        DOM.btnBrowserClose.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeQuickLogin();
+        });
+    }
+    
+    // Bind screenshot click simulation
+    if (DOM.browserScreenshot) {
+        DOM.browserScreenshot.addEventListener('click', async (e) => {
+            if (!currentBrowserSessionId) return;
+            const rect = DOM.browserScreenshot.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            const x_pct = x / rect.width;
+            const y_pct = y / rect.height;
+            
+            DOM.browserViewportLoader.classList.remove('hidden');
+            try {
+                await apiCall(`/api/browser/click/${currentBrowserSessionId}`, 'POST', { x_pct, y_pct });
+                await updateBrowserScreenshot();
+            } catch (err) {
+                console.error('Lỗi click trình duyệt ảo:', err);
+            } finally {
+                DOM.browserViewportLoader.classList.add('hidden');
+            }
+        });
+    }
+    
+    // Bind text typing
+    if (DOM.btnBrowserTypeSubmit) {
+        DOM.btnBrowserTypeSubmit.addEventListener('click', (e) => {
+            e.preventDefault();
+            sendBrowserType();
+        });
+    }
+    if (DOM.browserTypeInput) {
+        DOM.browserTypeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                sendBrowserType();
+            }
+        });
+    }
+    
+    // Bind special keys
+    const specialKeys = [DOM.btnBrowserKeyEnter, DOM.btnBrowserKeyBackspace, DOM.btnBrowserKeyTab, DOM.btnBrowserKeyReload];
+    specialKeys.forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const key = btn.getAttribute('data-key');
+                sendBrowserPress(key);
+            });
+        }
+    });
+}
+
 // ----------------- INIT & BINDINGS -----------------
 
 function initApp() {
@@ -1440,6 +1688,7 @@ function setupEventListeners() {
     DOM.btnTestGroq.addEventListener('click', () => testApiAi('groq', DOM.btnTestGroq));
     DOM.formSystemSettings.addEventListener('submit', handleSystemSettingsSubmit);
     setupSocialApiBindings();
+    setupVirtualBrowserHandlers();
 }
 
 // Initialize on page load
