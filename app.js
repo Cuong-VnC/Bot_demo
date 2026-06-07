@@ -9,7 +9,9 @@ const STATE = {
     selectedVideo: null,       // video currently selected for manual reup
     manualVideos: [],          // cached scan videos
     activeManualTaskId: null,
-    manualPollInterval: null
+    manualPollInterval: null,
+    autoVideos: [],            // cached auto scan queue items
+    activeAutoPollInterval: null // interval timer for auto-scan tab polling
 };
 
 // DOM Elements
@@ -31,6 +33,7 @@ const DOM = {
     schedulerBadge: document.getElementById('scheduler-badge'),
     schedulerBadgeText: document.getElementById('scheduler-badge-text'),
     btnToggleScheduler: document.getElementById('btn-toggle-scheduler'),
+    btnTriggerScan: document.getElementById('btn-trigger-scan'),
     
     // Stats
     statMonitored: document.getElementById('stat-monitored'),
@@ -86,6 +89,15 @@ const DOM = {
     progressPctText: document.getElementById('progress-pct-text'),
     progressBarFill: document.getElementById('progress-bar-fill'),
     progressSubText: document.getElementById('progress-sub-text'),
+    
+    // Auto Scan Tab
+    btnTriggerScanTab: document.getElementById('btn-trigger-scan-tab'),
+    btnToggleSchedulerTab: document.getElementById('btn-toggle-scheduler-tab'),
+    schedulerBadgeTab: document.getElementById('scheduler-badge-tab'),
+    schedulerBadgeTextTab: document.getElementById('scheduler-badge-text-tab'),
+    btnClearCompleted: document.getElementById('btn-clear-completed'),
+    btnClearQueueAll: document.getElementById('btn-clear-queue-all'),
+    autoQueueListTbody: document.getElementById('auto-queue-list-tbody'),
     
     // System Settings & APIs
     formApiAi: document.getElementById('form-api-ai'),
@@ -220,6 +232,12 @@ function setupTabs() {
 function switchTab(tabName) {
     STATE.activeTab = tabName;
     
+    // Clear auto-scan tab polling if switching away
+    if (STATE.activeAutoPollInterval) {
+        clearInterval(STATE.activeAutoPollInterval);
+        STATE.activeAutoPollInterval = null;
+    }
+    
     // Update active navbar item
     DOM.navItems.forEach(item => {
         if (item.getAttribute('data-tab') === tabName) {
@@ -243,6 +261,7 @@ function switchTab(tabName) {
         dashboard: { title: 'Dashboard', subtitle: 'Tổng quan hệ thống tự động hóa reup video.' },
         channels: { title: 'Kênh & Ánh xạ', subtitle: 'Quản lý danh sách kênh nguồn và cấu hình đăng tải kênh đích.' },
         reup: { title: 'Cấu hình Reup', subtitle: 'Thiết lập tham số chỉnh sửa video, nhạc nền và cơ chế lách bản quyền.' },
+        auto: { title: 'Quét video tự động', subtitle: 'Xem tiến trình và quản lý hàng đợi video reup tự động (Scheduler).' },
         manual: { title: 'Quét & Xử lý thủ công', subtitle: 'Quét danh sách video từ kênh nguồn và đăng tải lên kênh đích tức thời.' },
         settings: { title: 'Cài đặt hệ thống', subtitle: 'Cấu hình Google AI Studio, Groq API, Token mạng xã hội và Active Ping.' }
     };
@@ -265,6 +284,8 @@ function loadTabData(tabName) {
     } else if (tabName === 'reup') {
         loadReupSettings();
         loadMusicLibrary();
+    } else if (tabName === 'auto') {
+        loadAutoQueueTab();
     } else if (tabName === 'manual') {
         loadManualChannelsDropdown();
     } else if (tabName === 'settings') {
@@ -347,6 +368,27 @@ async function handleToggleScheduler() {
         }
     } catch (err) {
         alert('Lỗi khi thay đổi trạng thái scheduler: ' + err.message);
+    }
+}
+
+async function handleTriggerScan() {
+    DOM.btnTriggerScan.disabled = true;
+    const originalText = DOM.btnTriggerScan.innerHTML;
+    DOM.btnTriggerScan.innerHTML = '<i class="logo-spin" style="display:inline-block; animation: rotateLogo 1s linear infinite;" data-lucide="refresh-cw"></i> Đang quét...';
+    lucide.createIcons();
+    
+    try {
+        const data = await apiCall('/api/scheduler/scan', 'POST');
+        if (data.status === 'success') {
+            alert('Đã kích hoạt quét kênh nguồn tự động! Vui lòng theo dõi tiến trình trong bảng log.');
+            setTimeout(loadLogs, 1000);
+        }
+    } catch (err) {
+        alert('Lỗi kích hoạt quét kênh: ' + err.message);
+    } finally {
+        DOM.btnTriggerScan.disabled = false;
+        DOM.btnTriggerScan.innerHTML = originalText;
+        lucide.createIcons();
     }
 }
 
@@ -888,6 +930,283 @@ function startPollingManualProgress() {
     }, 2000);
 }
 
+// ----------------- TAB: AUTO SCAN & QUEUE -----------------
+
+async function loadAutoQueueTab() {
+    // Initial fetch
+    await loadAutoQueue();
+    await updateAutoSchedulerBadge();
+    
+    // Set up polling interval every 5 seconds
+    if (STATE.activeAutoPollInterval) clearInterval(STATE.activeAutoPollInterval);
+    STATE.activeAutoPollInterval = setInterval(async () => {
+        if (STATE.activeTab === 'auto') {
+            await loadAutoQueue();
+            await updateAutoSchedulerBadge();
+        } else {
+            clearInterval(STATE.activeAutoPollInterval);
+            STATE.activeAutoPollInterval = null;
+        }
+    }, 5000);
+}
+
+async function updateAutoSchedulerBadge() {
+    try {
+        const stats = await apiCall('/api/status');
+        
+        // Update Scheduler status badge on tab
+        if (stats.auto_mode_enabled) {
+            DOM.schedulerBadgeTab.className = 'badge active';
+            DOM.schedulerBadgeTextTab.textContent = 'Scheduler Đang chạy';
+        } else {
+            DOM.schedulerBadgeTab.className = 'badge paused';
+            DOM.schedulerBadgeTextTab.textContent = 'Scheduler Đang tạm dừng';
+        }
+    } catch (err) {
+        console.error('Failed to load scheduler stats on tab:', err);
+    }
+}
+
+async function loadAutoQueue() {
+    try {
+        const queue = await apiCall('/api/queue');
+        STATE.autoVideos = queue;
+        renderAutoQueue();
+    } catch (err) {
+        console.error('Failed to load auto video queue:', err);
+        DOM.autoQueueListTbody.innerHTML = `<tr><td colspan="7" class="text-center text-red p-4">Lỗi tải dữ liệu: ${err.message}</td></tr>`;
+    }
+}
+
+function renderAutoQueue() {
+    DOM.autoQueueListTbody.innerHTML = '';
+    
+    if (STATE.autoVideos.length === 0) {
+        DOM.autoQueueListTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted p-4">Hàng đợi rỗng. Hãy kích hoạt Scheduler hoặc nhấn "Quét tất cả ngay".</td></tr>';
+        return;
+    }
+    
+    STATE.autoVideos.forEach(item => {
+        const row = document.createElement('tr');
+        
+        // Platform styling for source channel
+        const platformClass = `${(item.source_platform || 'youtube').toLowerCase()}-bg`;
+        let platformIcon = 'link-2';
+        if (item.source_platform === 'youtube') platformIcon = 'youtube';
+        if (item.source_platform === 'tiktok') platformIcon = 'music';
+        if (item.source_platform === 'facebook') platformIcon = 'facebook';
+        
+        // Source channel column
+        const sourceHtml = `
+            <div class="channel-info" style="gap: 8px;">
+                <div class="channel-platform-icon ${platformClass}" style="width: 24px; height: 24px;">
+                    <i data-lucide="${platformIcon}" style="width: 14px; height: 14px;"></i>
+                </div>
+                <div style="max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    <div style="font-weight: 600; font-size: 0.8rem; color: #ffffff;">${item.source_channel_name || 'Kênh ẩn'}</div>
+                </div>
+            </div>
+        `;
+        
+        // Video title & url column
+        const videoHtml = `
+            <div>
+                <div class="video-scan-title" style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.85rem;" title="${item.title}">${item.title}</div>
+                <a href="${item.url}" target="_blank" class="video-scan-url" style="display: inline-flex; align-items: center; gap: 4px; font-size: 0.7rem; color: var(--accent-primary);">
+                    <i data-lucide="external-link" style="width: 10px; height: 10px;"></i> Xem nguồn
+                </a>
+            </div>
+        `;
+        
+        // Status Badge styling
+        let statusBadgeClass = 'status-badge badge-pending';
+        let statusText = 'Chờ xử lý';
+        
+        if (item.status === 'processing') {
+            statusBadgeClass = 'status-badge badge-processing';
+            statusText = 'Đang xử lý';
+        } else if (item.status === 'completed') {
+            statusBadgeClass = 'status-badge badge-completed';
+            statusText = 'Hoàn thành';
+        } else if (item.status === 'failed') {
+            statusBadgeClass = 'status-badge badge-failed';
+            statusText = 'Thất bại';
+        }
+        
+        // Display error message under status if failed
+        const statusHtml = `
+            <div>
+                <span class="${statusBadgeClass}">${statusText}</span>
+                ${item.error_msg ? `<div style="font-size: 0.7rem; color: var(--failed); max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 4px;" title="${item.error_msg}">${item.error_msg}</div>` : ''}
+            </div>
+        `;
+        
+        // Dest distributions list
+        let destsHtml = '';
+        if (item.uploads && item.uploads.length > 0) {
+            destsHtml = '<div style="display: flex; flex-direction: column; gap: 4px;">';
+            item.uploads.forEach(up => {
+                const isSuccess = up.status === 'success';
+                const dotColor = isSuccess ? '#10b981' : '#ef4444';
+                const upPlatform = (up.dest_platform || 'youtube').toLowerCase();
+                let upIcon = 'link';
+                if (upPlatform === 'youtube') upIcon = 'youtube';
+                if (upPlatform === 'tiktok') upIcon = 'music';
+                if (upPlatform === 'facebook') upIcon = 'facebook';
+                
+                destsHtml += `
+                    <div style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem;">
+                        <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${dotColor};"></span>
+                        <i data-lucide="${upIcon}" style="width: 11px; height: 11px; color: var(--text-muted);"></i>
+                        <span style="color: #ffffff; font-weight: 500;">${up.dest_channel_name || 'Kênh đích'}</span>
+                        ${isSuccess && up.video_url_or_id ? `
+                            <a href="${up.video_url_or_id}" target="_blank" style="color: var(--accent-primary); display: inline-flex; align-items: center;" title="Xem bài đăng">
+                                <i data-lucide="external-link" style="width: 10px; height: 10px; margin-left: 2px;"></i>
+                            </a>
+                        ` : ''}
+                        ${!isSuccess && up.error_msg ? `
+                            <span class="text-red" style="font-size: 0.65rem;" title="${up.error_msg}">[Lỗi]</span>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            destsHtml += '</div>';
+        } else {
+            destsHtml = '<span class="text-muted" style="font-size: 0.75rem;">Chưa phân phối</span>';
+        }
+        
+        // Format timestamp
+        let formattedDate = '-';
+        if (item.created_at) {
+            try {
+                // sqlite created_at is like "YYYY-MM-DD HH:MM:SS"
+                formattedDate = item.created_at.split(' ')[0] + ' ' + item.created_at.split(' ')[1].substring(0, 5);
+            } catch (e) {
+                formattedDate = item.created_at;
+            }
+        }
+        
+        // Action buttons
+        const isFailed = item.status === 'failed';
+        const actionsHtml = `
+            <div style="display: flex; gap: 8px; justify-content: center; align-items: center;">
+                <button class="btn btn-secondary btn-sm btn-retry-auto" data-id="${item.id}" ${!isFailed ? 'disabled style="opacity:0.3; pointer-events:none;"' : ''} title="Đưa lại vào hàng đợi chờ xử lý">
+                    <i data-lucide="refresh-cw" style="width: 12px; height: 12px;"></i> Thử lại
+                </button>
+                <button class="btn-icon btn-delete-auto" data-id="${item.id}" title="Xóa video khỏi hàng đợi">
+                    <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                </button>
+            </div>
+        `;
+        
+        row.innerHTML = `
+            <td>${videoHtml}</td>
+            <td>${sourceHtml}</td>
+            <td>${statusHtml}</td>
+            <td style="text-align: center; font-weight: 600; font-size: 0.85rem;">${item.attempts}/3</td>
+            <td>${destsHtml}</td>
+            <td style="font-size: 0.75rem; color: var(--text-muted);">${formattedDate}</td>
+            <td>${actionsHtml}</td>
+        `;
+        
+        DOM.autoQueueListTbody.appendChild(row);
+    });
+    
+    lucide.createIcons();
+    
+    // Bind retry buttons
+    DOM.autoQueueListTbody.querySelectorAll('.btn-retry-auto').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            btn.disabled = true;
+            try {
+                const data = await apiCall(`/api/queue/${id}/retry`, 'POST');
+                if (data.status === 'success') {
+                    loadAutoQueue();
+                }
+            } catch (err) {
+                alert('Thử lại thất bại: ' + err.message);
+                btn.disabled = false;
+            }
+        });
+    });
+    
+    // Bind delete buttons
+    DOM.autoQueueListTbody.querySelectorAll('.btn-delete-auto').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-id');
+            if (confirm('Xóa video này khỏi hàng đợi?')) {
+                try {
+                    const data = await apiCall(`/api/queue/${id}`, 'DELETE');
+                    if (data.status === 'success') {
+                        loadAutoQueue();
+                    }
+                } catch (err) {
+                    alert('Xóa thất bại: ' + err.message);
+                }
+            }
+        });
+    });
+}
+
+async function handleTriggerScanTab() {
+    DOM.btnTriggerScanTab.disabled = true;
+    const originalText = DOM.btnTriggerScanTab.innerHTML;
+    DOM.btnTriggerScanTab.innerHTML = '<i class="logo-spin" style="display:inline-block; animation: rotateLogo 1s linear infinite;" data-lucide="refresh-cw"></i> Đang quét...';
+    lucide.createIcons();
+    
+    try {
+        const data = await apiCall('/api/scheduler/scan', 'POST');
+        if (data.status === 'success') {
+            alert('Đã kích hoạt quét kênh nguồn tự động! Vui lòng theo dõi tiến trình trong bảng hàng đợi bên dưới.');
+            setTimeout(loadAutoQueue, 1500);
+        }
+    } catch (err) {
+        alert('Lỗi kích hoạt quét kênh: ' + err.message);
+    } finally {
+        DOM.btnTriggerScanTab.disabled = false;
+        DOM.btnTriggerScanTab.innerHTML = originalText;
+        lucide.createIcons();
+    }
+}
+
+async function handleToggleSchedulerTab() {
+    try {
+        const data = await apiCall('/api/scheduler/toggle', 'POST');
+        if (data.status === 'success') {
+            updateAutoSchedulerBadge();
+        }
+    } catch (err) {
+        alert('Lỗi khi thay đổi trạng thái scheduler: ' + err.message);
+    }
+}
+
+async function handleClearCompletedQueue() {
+    if (confirm('Xóa tất cả các video đã hoàn thành khỏi hàng đợi?')) {
+        try {
+            const data = await apiCall('/api/queue?status=completed', 'DELETE');
+            if (data.status === 'success') {
+                loadAutoQueue();
+            }
+        } catch (err) {
+            alert('Dọn dẹp hàng đợi thất bại: ' + err.message);
+        }
+    }
+}
+
+async function handleClearQueueAll() {
+    if (confirm('⚠️ CẢNH BÁO: Bạn có chắc chắn muốn XÓA TOÀN BỘ hàng đợi và lịch sử upload tự động? Hành động này không thể hoàn tác.')) {
+        try {
+            const data = await apiCall('/api/queue', 'DELETE');
+            if (data.status === 'success') {
+                loadAutoQueue();
+            }
+        } catch (err) {
+            alert('Xóa hàng đợi thất bại: ' + err.message);
+        }
+    }
+}
+
 // ----------------- TAB: SETTINGS & APIs -----------------
 
 async function loadSystemSettings() {
@@ -1087,6 +1406,7 @@ function setupEventListeners() {
     
     // Toggle Scheduler
     DOM.btnToggleScheduler.addEventListener('click', handleToggleScheduler);
+    DOM.btnTriggerScan.addEventListener('click', handleTriggerScan);
     DOM.btnRefreshLogs.addEventListener('click', loadLogs);
     
     // Tab setup
@@ -1107,6 +1427,12 @@ function setupEventListeners() {
     // Manualscan
     DOM.btnManualScan.addEventListener('click', handleManualScan);
     DOM.btnStartManual.addEventListener('click', handleStartManualProcessing);
+    
+    // Autoscan Tab
+    DOM.btnTriggerScanTab.addEventListener('click', handleTriggerScanTab);
+    DOM.btnToggleSchedulerTab.addEventListener('click', handleToggleSchedulerTab);
+    DOM.btnClearCompleted.addEventListener('click', handleClearCompletedQueue);
+    DOM.btnClearQueueAll.addEventListener('click', handleClearQueueAll);
     
     // APIs and Systems
     DOM.formApiAi.addEventListener('submit', handleApiAiSubmit);
